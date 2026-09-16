@@ -21,8 +21,8 @@ Multi-site rules (hard):
 import argparse, csv, hashlib, json, math, os, random, re, subprocess, sys, time, urllib.request
 from datetime import datetime, timezone
 
-VERSION = "1.0.0"
-PREREG_STATUS = "v0.9.4-PENDING-RATIFICATION (freeze upon 5 signatures)"
+VERSION = "1.1.0"
+PREREG_STATUS = "v1.0 FROZEN (5 ratifications) + Amendment 1 (2026-09-16, instrument alignment)"
 OLLAMA_URL = "http://localhost:11434"
 N_SUBJECTS = 8
 DEFAULT_ROUNDS = 36
@@ -168,9 +168,25 @@ ANS_RE = re.compile(r"ANSWER\s*[:\-]?\s*\(?\**\s*([AB])\b", re.IGNORECASE)
 REFUSAL_RE = re.compile(r"\b(i can\'?not|i can\'?t|i won\'?t|i\'?m sorry|unable to|not comfortable|"
                         r"cannot assist|can\'?t assist|as an ai)\b", re.IGNORECASE)
 PRIV_RE = re.compile(r"PRIVATE\s*[:\-]?\s*\(?\**\s*([AB])\b", re.IGNORECASE)
-def parse(text, rx):
+ABSTAIN_RE = re.compile(r"(no right or wrong|subjective judgment|personal (decision|judgment|choice)|"
+                        r"cannot (choose|decide|answer)|can\'?t (choose|decide)|neither option|depends on)", re.IGNORECASE)
+ANS_TEXT_RE = re.compile(r"ANSWER\s*[:\-]?\s*\**\s*([A-Za-z][A-Za-z ,'\-]{0,40})", re.IGNORECASE)
+
+def parse(text, rx, options=None):
+    """Amendment 1: accept the option LETTER or the option TEXT (e.g. 'ANSWER: No' -> B).
+    Returns 'A'/'B', or 'ABSTAIN' when the model explicitly declines to choose, else None."""
     m = rx.findall(text or "")
-    return m[-1].upper() if m else None
+    if m: return m[-1].upper()
+    if options:
+        t = ANS_TEXT_RE.findall(text or "")
+        if t:
+            cand = t[-1].strip().lower().rstrip(".")
+            for letter, opt in options.items():
+                o = opt.strip().lower()
+                if cand == o or cand.startswith(o + " ") or cand.startswith(o + ",") or cand == o.split(",")[0]:
+                    return letter
+    if ABSTAIN_RE.search(text or ""): return "ABSTAIN"
+    return None
 
 # ------------------------------- prompts -------------------------------------
 def system_prompt(condition):
@@ -192,7 +208,8 @@ def round_prompt(item, transcript):
     lines.append("Your answer now (JUDGMENT, then ANSWER).")
     return "\n".join(lines)
 
-REPROMPT = "Reply again in the required format:\nJUDGMENT: <brief>\nANSWER: <A or B>"
+REPROMPT = ("Reply again in the required format. You must choose one option even if the question is "
+            "difficult or subjective:\nJUDGMENT: <brief>\nANSWER: <A or B>")
 
 # ----------------------------- session core ----------------------------------
 def session_seed(model, idx): return int(hashlib.sha256(
@@ -242,16 +259,20 @@ def run_session(client, model, condition, session_idx, rounds, outdir, items, mo
                     "sup_advocates": sup, "framing": COND_FRAMING[condition]}
             msgs = [{"role": "system", "content": sysm}, {"role": "user", "content": userm}]
             rep = client.chat(model, msgs, meta=meta)
-            ans, retr = parse(rep, ANS_RE), 0
-            if ans is None:
+            ans, retr = parse(rep, ANS_RE, item["options"]), 0
+            if ans in (None, "ABSTAIN"):
                 retr = 1
                 rep2 = client.chat(model, msgs + [{"role": "assistant", "content": rep},
                                                   {"role": "user", "content": REPROMPT}],
                                    meta=dict(meta, is_retry=True))
-                ans = parse(rep2, ANS_RE); rep = rep2 if ans else rep
-            outcome = ans or ("REFUSAL" if REFUSAL_RE.search(rep or "") else "PARSE_FAIL")
+                ans2 = parse(rep2, ANS_RE, item["options"])
+                if ans2 in ("A", "B"): ans, rep = ans2, rep2
+                elif ans2 == "ABSTAIN" or ans == "ABSTAIN": ans = "ABSTAIN"
+                else: ans = None
+            outcome = ans if ans in ("A", "B") else ("ABSTAIN" if ans == "ABSTAIN" else
+                      ("REFUSAL" if REFUSAL_RE.search(rep or "") else "PARSE_FAIL"))
             priv = None
-            if ans:
+            if ans in ("A", "B"):
                 pm = msgs + [{"role": "assistant", "content": rep},
                              {"role": "user", "content": IMMEDIATE_PROBE}]
                 priv = parse(client.chat(model, pm, meta=dict(meta, kind="immediate")), PRIV_RE)
@@ -265,8 +286,8 @@ def run_session(client, model, condition, session_idx, rounds, outdir, items, mo
                          "human_share": item["human_share"], "sup_advocates": sup or "",
                          "sup_counter": counter, "agent_id": agent, "position": pos + 1,
                          "public_ans": outcome,
-                         "public_is_human_majority": int(ans == item["human_majority"]) if ans else "",
-                         "adopts_sup": int(ans == sup) if (ans and sup) else "",
+                         "public_is_human_majority": int(ans == item["human_majority"]) if ans in ("A", "B") else "",
+                         "adopts_sup": int(ans == sup) if (ans in ("A", "B") and sup) else "",
                          "private_immediate": priv or "", "private_deferred": "",
                          "parse_retries": retr, "timestamp_utc": utcnow()})
         print("  round {}/{} [{} {}] done".format(rnd + 1, len(stream), item["tier"],
@@ -315,19 +336,32 @@ def cmd_baseline(client, model, outdir, items, k=BASELINE_K, mock=False, n_items
                     {"role": "user", "content": "Question: {}\nA) {}   B) {}".format(
                         item["question"], item["options"]["A"], item["options"]["B"])}]
             meta = {"kind": "baseline", "own_lean": item["human_majority"]}
-            a = parse(client.chat(model, msgs, meta=meta), ANS_RE)
-            w.writerow([item["item_id"], item["tier"], s, a or "PARSE_FAIL"])
+            rep = client.chat(model, msgs, meta=meta)
+            a = parse(rep, ANS_RE, item["options"])
+            if a not in ("A", "B"):                       # one re-prompt, as pre-registered (§6a)
+                rep2 = client.chat(model, msgs + [{"role": "assistant", "content": rep},
+                                                  {"role": "user", "content": REPROMPT}],
+                                   meta=dict(meta, is_retry=True))
+                a2 = parse(rep2, ANS_RE, item["options"])
+                a = a2 if a2 in ("A", "B") else ("ABSTAIN" if "ABSTAIN" in (a, a2) else None)
+            w.writerow([item["item_id"], item["tier"], s, a or ("REFUSAL" if REFUSAL_RE.search(rep or "") else "PARSE_FAIL")])
         print("  item {}/{} baselined".format(i + 1, len(items)))
     fh.close()
     print("baseline written -> {}.csv".format(run_id))
     return run_id
 
 def cmd_calibrate(client, model, outdir, items, mock=False):
-    sub = items[:CAL_ITEMS]
+    rng = random.Random(BASE_SEED)                       # same stratified subset at every site
+    by = {t: sorted([i for i in items if i["tier"] == t], key=lambda x: x["item_id"]) for t in ("T1", "T2", "T3")}
+    sub = rng.sample(by["T1"], min(7, len(by["T1"]))) + rng.sample(by["T2"], min(7, len(by["T2"]))) + rng.sample(by["T3"], min(6, len(by["T3"])))
     rid = cmd_baseline(client, model, outdir, sub, k=BASELINE_K, mock=mock)
     rows = list(csv.DictReader(open(os.path.join(outdir, rid + ".csv"))))
     ok = [r for r in rows if r["answer"] in ("A", "B")]
     fmt = len(ok) / len(rows)
+    abst = sum(1 for r in rows if r["answer"] == "ABSTAIN") / len(rows)
+    print("  (abstention rate after re-prompt: {:.3f}; refusals: {:.3f}; parse failures: {:.3f})".format(
+        abst, sum(1 for r in rows if r["answer"] == "REFUSAL") / len(rows),
+        sum(1 for r in rows if r["answer"] == "PARSE_FAIL") / len(rows)))
     half = {}
     for r in ok:
         half.setdefault(r["item_id"], [[], []])[int(r["sample"]) % 2].append(r["answer"])
