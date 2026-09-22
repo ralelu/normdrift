@@ -1,0 +1,23 @@
+{
+  "platform": "normdrift",
+  "version": "1.0.0",
+  "prereg": "v0.9.4-PENDING-RATIFICATION (freeze upon 5 signatures)",
+  "bank_sha256": "MOCK",
+  "model_digest": "mock",
+  "run_id": "C2_mockmodel_s0_mocksite_f0e6",
+  "site": "mocksite",
+  "commit": "mock",
+  "model": "mockmodel",
+  "condition": "C2",
+  "seed": 95779182330895,
+  "temperature": 0.7,
+  "framing_sha": {
+    "prestige": "4a9fe5ed8733bc9c6fb6b1f3480bb3ac45b4d340dcccb5ae624c354ee2c87b3c",
+    "peer": "ab5c68e20d4438623f73173e71688096a1f2c43ed2b7d0e4f63276ea16e7e959",
+    "none": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "server": {
+    "version": "mock"
+  },
+  "date": "2026-09-14T11:56:46Z"
+}
