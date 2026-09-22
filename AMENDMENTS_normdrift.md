@@ -59,3 +59,24 @@ La discrepancia de llama3:8b es sistemática y no aleatoria: sobre los mismos 40
 2. site2 ejecutó además una línea base completa de gemma2:9b siendo sitio réplica (además de su sub-base de 40 ítems). Ambos archivos se conservan; la comprobación de equivalencia de gemma2:9b usa los 40 ítems comunes, como en el resto de modelos, y la comparación sobre los 206 ítems (MAE 0.098, r 0.914) se reporta como información adicional.
 3. `BASE_llama3-8b_site4_79c1.csv` está vacío (0 filas): ejecución interrumpida en site4, anterior a la Fase 2. Se conserva el archivo y se documenta.
 4. No se conservan en el repositorio los rastros de calibración de deepseek-v2:16b de site1 ni la segunda tanda de calibraciones de ese sitio; pendiente de confirmación con site1.
+
+### Enmienda 3 — RESOLUCIÓN (2026-09-22)
+Comprobación solicitada a site3 y site4: ambos sitios ejecutan **el mismo binario** de llama3:8b (digest Ollama `365c0bd3c000`, 4.7 GB). Se aplica por tanto la **rama B**, pre-especificada antes de conocer este dato: **llama3:8b queda EXCLUIDO del estudio**.
+
+**Observación de control (refuerza la atribución):** la divergencia no es atribuible al sitio ni al sistema operativo. La misma máquina Windows (site3) produjo resultados equivalentes en sus otros dos modelos (phi4: MAE 0.064 frente a macOS; gemma3:latest: MAE 0.123 frente a Linux), y el resto de pares —que cruzan macOS, Linux, Windows y servidor— cumplen el criterio. La no-equivalencia es específica de llama3:8b, el modelo con mayor ruido interno del roster (split-half 0.155 / 0.091 y estabilidad de calibración 0.106 / 0.087, los peores valores medidos).
+
+**Interpretación reportable (no demostrada, se declara como tal):** un mismo modelo cuantizado y con digest idéntico puede producir distribuciones de respuesta distintas según el hardware y el backend de inferencia. Con las mediciones disponibles no podemos identificar el mecanismo; lo que sí establecen es que la equivalencia entre máquinas no puede darse por supuesta ni siquiera fijando el binario, y que conviene comprobarla empíricamente en cualquier estudio multi-sitio con modelos locales. Esto se reportará en el manuscrito como hallazgo metodológico, junto con las cifras.
+
+**Roster final tras la Enmienda 3: 5 modelos, 3 familias arquitectónicas.**
+
+| Modelo | Familia | Sitio primario | Sitio réplica |
+|---|---|---|---|
+| gemma2:9b | Gemma | site1 | site2 |
+| gemma3:latest | Gemma | site3 | site4 |
+| gemma3:12b | Gemma | site4 | site5 |
+| qwen2.5:7b | Qwen | site1 | site5 |
+| phi4 | Phi | site2 | site3 |
+
+Modelos excluidos y motivo: deepseek-v2:16b (Enmienda 2, estabilidad basal discordante entre sitios), llama3:8b (Enmienda 3 rama B, no-equivalencia de propensiones entre sitios con binario idéntico). Todos los rastros se conservan y ambas exclusiones se reportan con sus cifras.
+
+**Efecto sobre la Fase 3:** 5 modelos × 2 sitios × 4 condiciones = 40 sesiones (8 por sitio). site3 pierde un modelo primario y site4 un modelo réplica; el resto de la asignación no cambia y todas las celdas conservan sus dos sitios.
