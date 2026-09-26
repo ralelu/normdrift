@@ -1,0 +1,23 @@
+{
+  "platform": "normdrift",
+  "version": "1.1.0",
+  "prereg": "v1.0 FROZEN (5 ratifications) + Amendment 1 (2026-09-16, instrument alignment)",
+  "bank_sha256": "a7cd9ee9a3b32ca571804ee907b467c4e3def4dd521384f92ad7de22ec15d7b1",
+  "model_digest": "a2af6cc3eb7fa8be8504abaf",
+  "run_id": "C2_gemma3-latest_s1_site4_b1f0",
+  "site": "site4",
+  "commit": "4c4fe2d",
+  "model": "gemma3:latest",
+  "condition": "C2",
+  "seed": 117372432445550,
+  "temperature": 0.7,
+  "framing_sha": {
+    "prestige": "4a9fe5ed8733bc9c6fb6b1f3480bb3ac45b4d340dcccb5ae624c354ee2c87b3c",
+    "peer": "ab5c68e20d4438623f73173e71688096a1f2c43ed2b7d0e4f63276ea16e7e959",
+    "none": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "server": {
+    "version": "0.16.2"
+  },
+  "date": "2026-09-26T09:30:35Z"
+}
